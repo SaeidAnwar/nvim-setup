@@ -40,3 +40,7 @@ vim.keymap.set('n', '<leader>gs', vim.cmd.Git)
 vim.keymap.set("n", "<leader>ld", vim.lsp.buf.definition, bufopts)
 vim.keymap.set("n", "<leader>ll", vim.lsp.buf.hover, bufopts)
 vim.keymap.set("n", "<leader>ls", vim.lsp.buf.implementation, bufopts) 
+vim.o.updatetime = 250
+vim.cmd [[autocmd CursorHold * lua vim.diagnostic.open_float(nil, { focusable = false })]]
+
+
