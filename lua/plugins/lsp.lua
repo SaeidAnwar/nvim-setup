@@ -15,116 +15,108 @@ return {
     },
 
     config = function()
+        local lspconfig = require("lspconfig")
+        local mason = require("mason")
+        local mason_lspconfig = require("mason-lspconfig")
+        local cmp = require("cmp")
+        local cmp_lsp = require("cmp_nvim_lsp")
+        local capabilities = cmp_lsp.default_capabilities()
+
+        require("fidget").setup({})
+        mason.setup()
+
         require("conform").setup({
             formatters_by_ft = {
                 c = { "clang-format" },
+                cpp = { "clang-format" },
                 h = { "clang-format" },
                 hpp = { "clang-format" },
-                cpp = { "clang-format" },
                 glsl = { "clang-format" },
                 java = { "clang-format" },
                 python = { "black" },
+                gdscript = { "gdformat" }, -- GDScript formatter
             },
         })
 
-        local cmp = require('cmp')
-        local cmp_lsp = require("cmp_nvim_lsp")
-        local capabilities = vim.tbl_deep_extend(
-        "force",
-        {},
-        vim.lsp.protocol.make_client_capabilities(),
-        cmp_lsp.default_capabilities()
-        )
+        local on_attach = function(_, bufnr)
+            vim.api.nvim_create_autocmd("BufWritePre", {
+                buffer = bufnr,
+                callback = function()
+                    require("conform").format({ async = true })
+                end,
+            })
+        end
 
-        require("fidget").setup({})
-        require("mason").setup()
-        require("mason-lspconfig").setup({
-            ensure_installed = {
-                "clangd", -- C++ and C
-                "jdtls",  -- Java
-                "pyright", -- Python
-            },
+        mason_lspconfig.setup({
+            ensure_installed = { "clangd", "jdtls", "pyright" }, -- Removed gdscript
             handlers = {
                 function(server_name)
-                    if server_name == "clangd" then
-                        require("lspconfig").clangd.setup {}
-                    elseif server_name == "jdtls" then
-                        local jdtls = require("lspconfig").jdtls
-                        local home = vim.fn.expand("~")
-                        local workspace_dir = home .. "/.cache/jdtls/workspace/" .. vim.fn.fnamemodify(vim.fn.getcwd(), ":p:h:t")
-
-                        jdtls.setup({
-                            cmd = { "jdtls", "--jvm-arg=-Xmx2G" },
-                            root_dir = require("lspconfig.util").root_pattern("pom.xml", "gradle.build", ".git"),
-                            capabilities = capabilities,
-                            settings = {
-                                java = {
-                                    configuration = {
-                                        runtimes = {
-                                            {
-                                                name = "JavaSE-17",
-                                                path = "/usr/lib/jvm/java-17-openjdk/",
-                                            },
-                                            {
-                                                name = "JavaSE-21",
-                                                path = "/usr/lib/jvm/java-21-openjdk/",
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            init_options = {
-                                workspace = workspace_dir,
-                            },
-                            on_attach = function(client, bufnr)
-                                vim.api.nvim_create_autocmd("BufWritePre", {
-                                    buffer = bufnr,
-                                    callback = function()
-                                        require("conform").format({ async = true })
-                                    end,
-                                })
-                            end
-                        })
-                    elseif server_name == "pyright" then
-                        require("lspconfig").pyright.setup {
-                            capabilities = capabilities,
-                            on_attach = function(client, bufnr)
-                                vim.api.nvim_create_autocmd("BufWritePre", {
-                                    buffer = bufnr,
-                                    callback = function()
-                                        require("conform").format({ async = true })
-                                    end,
-                                })
-                            end,
-                            settings = {
-                                python = {
-                                    analysis = {
-                                        typeCheckingMode = "basic",
-                                        autoImportCompletions = true,
+                    lspconfig[server_name].setup({
+                        capabilities = capabilities,
+                        on_attach = on_attach,
+                    })
+                end,
+                ["jdtls"] = function()
+                    local home = vim.fn.expand("~")
+                    local workspace_dir = home .. "/.cache/jdtls/workspace/" .. vim.fn.fnamemodify(vim.fn.getcwd(), ":p:h:t")
+                    lspconfig.jdtls.setup({
+                        cmd = { "jdtls", "--jvm-arg=-Xmx2G" },
+                        root_dir = lspconfig.util.root_pattern("pom.xml", "gradle.build", ".git"),
+                        capabilities = capabilities,
+                        on_attach = on_attach,
+                        settings = {
+                            java = {
+                                configuration = {
+                                    runtimes = {
+                                        { name = "JavaSE-17", path = "/usr/lib/jvm/java-17-openjdk/" },
+                                        { name = "JavaSE-21", path = "/usr/lib/jvm/java-21-openjdk/" },
                                     }
                                 }
                             }
-                        }
-                    else
-                        require("lspconfig")[server_name].setup {
-                            capabilities = capabilities,
-                            on_attach = function(client, bufnr)
-                                if vim.bo.filetype == "c" or vim.bo.filetype == "cpp" or vim.bo.filetype == "java" or vim.bo.filetype == "python" then
-                                    vim.api.nvim_create_autocmd("BufWritePre", {
-                                        buffer = bufnr,
-                                        callback = function()
-                                            require("conform").format({ async = true })
-                                        end,
-                                    })
-                                end
-                            end
-                        }
-                    end
+                        },
+                        init_options = { workspace = workspace_dir },
+                    })
                 end,
             },
         })
 
-        local cmp_select = { behavior = cmp.SelectBehavior.Select }
+        -- Set up GDScript filetype detection
+        vim.api.nvim_create_autocmd({"BufRead", "BufNewFile"}, {
+            pattern = "*.gd",
+            callback = function()
+                vim.bo.filetype = "gdscript"
+            end,
+        })
+
+        -- Manual setup for GDScript LSP (not handled by Mason)
+        local gdscript_capabilities = vim.tbl_deep_extend("force", capabilities, {
+            workspace = {
+                configuration = false,
+                didChangeConfiguration = {
+                    dynamicRegistration = false,
+                },
+            },
+            textDocument = {
+                synchronization = {
+                    dynamicRegistration = false,
+                    didSave = true,
+                    willSave = false,
+                    willSaveWaitUntil = false,
+                },
+            },
+        })
+
+        lspconfig.gdscript.setup({
+            cmd = { "nc", "localhost", "6005" },
+            filetypes = { "gdscript" },
+            root_dir = lspconfig.util.root_pattern("project.godot", ".git"),
+            capabilities = gdscript_capabilities,
+            on_attach = on_attach,
+            settings = {},
+            flags = {
+                debounce_text_changes = 150,
+            },
+        })
 
         cmp.setup({
             snippet = {
@@ -137,7 +129,8 @@ return {
                 { name = 'luasnip' },
             }, {
                 { name = 'buffer' },
-            })
+            }),
+            mapping = cmp.mapping.preset.insert({}),
         })
 
         vim.diagnostic.config({
