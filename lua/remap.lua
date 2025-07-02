@@ -46,20 +46,4 @@ vim.cmd [[autocmd CursorHold * lua vim.diagnostic.open_float(nil, { focusable = 
 local cmp = require('cmp')
 local luasnip = require('luasnip')
 
-cmp.setup({
-    mapping = {
-        ['<Tab>'] = cmp.mapping(function(fallback)
-            if require("copilot.suggestion").is_visible() then
-                require("copilot.suggestion").accept()
-            elseif cmp.visible() then
-                cmp.select_next_item()
-            elseif luasnip.expand_or_jumpable() then
-                luasnip.expand_or_jump()
-            else
-                fallback()
-            end
-        end, { "i", "s" }),
-    },
-})
-
 
