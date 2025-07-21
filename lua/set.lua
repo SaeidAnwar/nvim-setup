@@ -16,6 +16,7 @@ vim.opt.ic = false
 vim.opt.termguicolors = true
 vim.opt.updatetime = 50
 vim.opt.ignorecase = true  -- Ignore case when searching
+vim.opt.autochdir = true
 vim.opt.smartcase = true   -- Case-sensitive if uppercase is used
 
 vim.api.nvim_create_autocmd({"BufEnter", "FocusGained"}, {
